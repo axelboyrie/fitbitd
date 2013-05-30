@@ -26,6 +26,7 @@ typedef struct {
     ant_t ant;
     libusb_device_handle *dev;
     int ep;
+    int attached;
 } antusb_t;
 
 int ant_usb_find_nodes(ant_cb_foundnode *found_node, void *user);

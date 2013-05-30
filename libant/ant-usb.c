@@ -87,8 +87,12 @@ static void ant_usb_destroy(ant_t *ant)
 
     DBG("destroy %s\n", ant->name);
 
-    if (usbant->dev)
+    if (usbant->dev) {
+        if (usbant->attached == 1) {
+            libusb_attach_kernel_driver(usbant->dev, 0);
+        }
         libusb_close(usbant->dev);
+    }
 
     for (devlist = opendevices; devlist; devlist = devlist->next) {
         if (devlist->usbant != usbant)
@@ -134,11 +138,15 @@ int ant_usb_find_nodes(ant_cb_foundnode *found_node, void *user)
     if (!opendevices) {
         DBG("initialising libusb\n");
         ret = libusb_init(&_usb);
+
         if (ret) {
             ERR("failed to init libusb\n");
             _usb = NULL;
             goto out;
         }
+        #if DEBUG == 1
+        libusb_set_debug(_usb, 3);
+        #endif
     }
 
     count = libusb_get_device_list(_usb, &list);
@@ -187,6 +195,18 @@ int ant_usb_find_nodes(ant_cb_foundnode *found_node, void *user)
         ret = libusb_open(list[i], &usbant->dev);
         if (ret)
             goto dev_err;
+
+
+        if (libusb_kernel_driver_active(usbant->dev, 0)) {
+            usbant->attached = 1;
+            libusb_detach_kernel_driver(usbant->dev, 0);
+        }
+
+        ret = libusb_claim_interface(usbant->dev, 0);
+        if (ret) {
+            ERR("failed to claim interface");
+        }
+
 
         ret = fn_init(usbant);
         if (ret)
