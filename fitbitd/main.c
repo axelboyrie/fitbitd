@@ -26,7 +26,7 @@
 #include <unistd.h>
 #include <sys/file.h>
 #include <sys/stat.h>
-
+#include <signal.h>
 #include <curl/curl.h>
 #include <mxml.h>
 
@@ -66,6 +66,8 @@ typedef struct {
     char tracker_id[20];
     char user_id[20];
 } record_state_t;
+
+bool sig_exit = false;
 
 static void found_fitbit_base(fitbit_t *fb, void *user)
 {
@@ -571,6 +573,12 @@ static void print_usage(FILE *f)
           "  --exit             Request that fitbitd exits\n");
 }
 
+void sig_terminate(int signum)
+{
+    DBG("Exit with signal %d \n", signum);
+    sig_exit = true;
+}
+
 int main(int argc, char *argv[])
 {
     fitbit_list_t *fblist = NULL, *curr;
@@ -584,7 +592,9 @@ int main(int argc, char *argv[])
     bool opt_help = false;
     char *opt_dump = NULL;
     char *opt_log = NULL;
-
+    
+    struct sigaction sig_action;
+    
     for (argi = 1; argi < argc; argi++) {
         if (!strcmp(argv[argi], "--version")) {
             opt_version = true;
@@ -696,7 +706,13 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    while (!control_exited()) {
+    //catch SIGTERM and SIGINT to exit cleanly
+    memset(&sig_action, 0, sizeof(struct sigaction));
+    sig_action.sa_handler = sig_terminate;
+    sigaction(SIGTERM, &sig_action, NULL);
+    sigaction(SIGINT, &sig_action, NULL);
+    
+    while (!sig_exit && !control_exited()) {
         fitbit_find_bases(found_fitbit_base, &fblist);
 
         for (curr = fblist; curr; curr = curr->next) {
